@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.daisaku31469.cuda.WeatherData
 
 @Dao
@@ -21,5 +22,8 @@ interface WeatherDataDao {
 
     @Query("DELETE FROM weather_data")
     suspend fun deleteAll()
+
+    @Update
+    suspend fun update(weatherData: WeatherData)
 }
 

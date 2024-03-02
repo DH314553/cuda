@@ -140,7 +140,7 @@ class MainActivity : AppCompatActivity() {
 
         // 天気情報が取得されたときにUIを更新
         val selectedFormattedWeatherDataObserver = Observer<String> { _ ->
-            lifecycleScope.launch {
+            mainViewModel.viewModelScope.launch {
                 jmaWeatherData = mainViewModel.getJmaData(selectedAreaCode)!!
                 val selectedFormattedWeatherData = mainViewModel.generateResultText(jmaWeatherData).first.toString()
                 weatherResultTextView.text = selectedFormattedWeatherData
@@ -152,13 +152,13 @@ class MainActivity : AppCompatActivity() {
         showWeatherButton.setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && selectedAreaCode != "") {
                 // 天気データを取得するメソッドを呼び出す
-                mainViewModel.fetchWeatherData(selectedAreaCode)
+                mainViewModel.fetchWeatherDataToday(selectedAreaCode)
 
                 mainViewModel.weatherData.observe(this) { weatherData ->
                     weatherData?.let {
                         // 天気データがnullでない場合の処理
                         // ここにUIを更新するコードを記述します
-                        val formattedWeatherData = mainViewModel.fetchWeatherData(selectedAreaCode)
+                        val formattedWeatherData = mainViewModel.fetchWeatherDataToday(selectedAreaCode)
                         weatherResultTextView.text = formattedWeatherData.toString()
                         showWeeklyWeatherButton.visibility = View.VISIBLE
                     } ?: Toast.makeText(this@MainActivity, "データが取得できませんでした", Toast.LENGTH_SHORT).show()

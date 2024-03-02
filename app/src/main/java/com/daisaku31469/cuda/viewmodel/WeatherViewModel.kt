@@ -5,11 +5,9 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.daisaku31469.cuda.WeatherData
 import com.daisaku31469.cuda.data.PrecipitationProbabilityUtil
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.net.HttpURLConnection
@@ -30,22 +28,23 @@ open class WeatherViewModel : ViewModel() {
     val dateFormat: LiveData<String> = _dateFormat
 
 
-    open fun fetchWeatherData(areaCode: String): List<WeatherData> {
-        val weather = mutableListOf<WeatherData>()
-        viewModelScope.launch {
-            val jmaData = getJmaData(areaCode)
-            val parsedData = generateResultText(jmaData)
-            _weatherData.value = parsedData.second
-        }
-        return weather
+    suspend fun fetchWeatherDataWeekly(areaCode: String): List<WeatherData>? {
+        val jmaData = getJmaData(areaCode)
+        val parsedData = generateResultText(jmaData)
+        _weatherData.postValue(formattedWeatherData(parsedData.second))
+        return _weatherData.value?.toMutableList()
     }
 
-//    fun updateWeatherData(parsedData: List<WeatherData>) {
-//        _weatherData.postValue(parsedData)
-//    }
+    private fun formattedWeatherData(parsedData: List<WeatherData>): List<WeatherData> {
+        val formattedWeatherData = mutableListOf<WeatherData>()
+        parsedData.forEach { data ->
+            formattedWeatherData.add(WeatherData(data.date, data.areaName, data.precipitation, data.predictedWeather))
+        }
+        return formattedWeatherData
+    }
 
 
-    suspend fun getJmaData(areaCode: String): JSONArray? {
+     open suspend fun getJmaData(areaCode: String): JSONArray? {
         return withContext(Dispatchers.IO) {
             val jmaUrl =
                 "https://www.jma.go.jp/bosai/forecast/data/forecast/$areaCode.json"
@@ -134,10 +133,10 @@ open class WeatherViewModel : ViewModel() {
         }
         // LiveDataオブジェクトにデータをセット
         _weatherData.postValue(weeklyWeatherDataList)
-        return Pair(todayWeatherDataList, weeklyWeatherDataList)
+        return Pair(todayWeatherDataList.distinct(), weeklyWeatherDataList.distinct())
     }
 
-    fun create2DArray(jsonData: JSONArray?): Triple<Array<FloatArray>, MutableList<String>, JSONArray> {
+    private fun create2DArray(jsonData: JSONArray?): Triple<Array<FloatArray>, MutableList<String>, JSONArray> {
         val names = mutableListOf<String>()
         val weatherCodes = mutableListOf<JSONArray>()
         val dates = mutableListOf<JSONArray>()

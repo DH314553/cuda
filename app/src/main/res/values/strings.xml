@@ -7,4 +7,5 @@
     <string name="weekly_weather">1週間の天気</string>
     <string name="weekly_weather_button">一週間の天気を表示</string>
     <string name="chart_precipitation">一週間の天気と降水確率のグラフ</string>
+    <string name="local_area_select">地域ごと</string>
 </resources>

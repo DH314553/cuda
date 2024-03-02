@@ -24,13 +24,35 @@
         android:backgroundTint="@color/blue"
         android:layout_marginTop="45dp"/>
 
+    <!-- 新しいボタンを追加 -->
+    <Button
+        android:id="@+id/regionSpecificButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/local_area_select"
+        android:visibility="gone"
+        android:backgroundTint="@color/blue"
+        android:layout_below="@id/chart_or_weekly"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp" />
+
+    <!-- ボタンを配置するためのレイアウトを追加 -->
+    <LinearLayout
+        android:id="@+id/buttonContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_below="@id/regionSpecificButton"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="16dp"/>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/weeklyWeatherRecyclerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="visible"
-        android:layout_below="@id/weeklyWeatherTitleTextView"
-        android:layout_marginTop="60dp"
+        android:layout_below="@id/buttonContainer"
+        android:layout_marginTop="50dp"
         android:clipToPadding="false"
         android:paddingEnd="8dp"
         android:paddingStart="8dp" />
@@ -41,6 +63,6 @@
         android:layout_height="400dp"
         android:visibility="gone"
         android:layout_below="@id/weeklyWeatherRecyclerView"
-        android:layout_marginTop="100dp" />
+        android:layout_marginTop="16dp" />
 
 </RelativeLayout>

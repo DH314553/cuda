@@ -1,15 +1,17 @@
 package com.daisaku31469.cuda
 
 import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.daisaku31469.cuda.adapter.WeeklyWeatherAdapter
@@ -23,20 +25,19 @@ import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
+import com.github.mikephil.charting.formatter.ValueFormatter
 import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import kotlinx.coroutines.launch
-import org.json.JSONException
 
 class WeeklyWeatherActivity : AppCompatActivity() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var chart: LineChart
-    private lateinit var weatherData: List<WeatherData>
     private lateinit var mainViewModel: MainViewModel
     private lateinit var weatherViewModel: WeatherViewModel
+    private lateinit var weatherData: List<WeatherData>
     private lateinit var generatedTextObserver: Observer<String>
-    private lateinit var areaCode: String
-    private var isWeatherDisplayed = false
+    private lateinit var selectedAreaCode: String
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,19 +45,18 @@ class WeeklyWeatherActivity : AppCompatActivity() {
         setContentView(R.layout.activity_weekly_weather)
 
         // areaCodeを取得
-        areaCode = intent.getStringExtra("areaCode") ?: ""
+        selectedAreaCode = intent.getStringExtra("areaCode") ?: ""
 
         recyclerView = findViewById(R.id.weeklyWeatherRecyclerView)
         chart = findViewById(R.id.precipitationChart)
         val chartPrecipitationButton = findViewById<Button>(R.id.chart_or_weekly)
+        val regionSpecificButton = findViewById<Button>(R.id.regionSpecificButton)
 
         weatherViewModel = WeatherViewModel()
 
         mainViewModel = ViewModelProvider(this, ViewModelFactory(weatherViewModel))[MainViewModel::class.java]
 
-        weatherData = weatherViewModel.fetchWeatherData(areaCode)
-
-// LiveData を観察し、データが変更されたときに RecyclerView のアダプターを更新
+        // LiveData を観察し、データが変更されたときに RecyclerView のアダプターを更新
         weatherViewModel.weatherData.observe(this) { weatherData ->
             val adapter = WeeklyWeatherAdapter(weatherData)
             recyclerView.layoutManager = LinearLayoutManager(this)
@@ -71,33 +71,82 @@ class WeeklyWeatherActivity : AppCompatActivity() {
         }
         mainViewModel.generatedText.observe(this, generatedTextObserver)
 
-        fetchDataAndGenerateText(weatherData)
-
         chartPrecipitationButton.setOnClickListener {
-            // データを取得してテキストを生成する
-            fetchDataAndGenerateText(weatherData)
-            chart.visibility = View.VISIBLE
+            weatherViewModel.viewModelScope.launch {
+                if (chart.visibility == View.VISIBLE && regionSpecificButton.visibility == View.VISIBLE) {
+                    chart.visibility = View.GONE
+                    weatherData = weatherViewModel.fetchWeatherDataWeekly(selectedAreaCode) ?: return@launch
+                    fetchDataAndGenerateText(selectedAreaCode, weatherData)
+                } else {
+                    // データを取得してテキストを生成する
+                    regionSpecificButton.visibility = View.VISIBLE
+                    chart.visibility = View.VISIBLE
+                    weatherData = weatherViewModel.fetchWeatherDataWeekly(selectedAreaCode) ?: return@launch
+                    fetchDataAndGenerateText(selectedAreaCode, weatherData)
+                }
+            }
+        }
+
+        // 地域別表示ボタンがクリックされたときの処理
+        regionSpecificButton.setOnClickListener {
+            // 地域別のデータを取得して表示する処理を実装
+            fetchRegionSpecificData()
         }
     }
 
-    private fun fetchDataAndGenerateText(weatherData: List<WeatherData>): Boolean {
-        lifecycleScope.launch {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (isWeatherDisplayed) {
-                    // 天気データを取得して表示
-                    weatherViewModel.fetchWeatherData(areaCode)
-                    recyclerView.visibility = View.VISIBLE
-                    chart.visibility = View.GONE
-                } else {
-                    // 降水確率の折れ線グラフを表示
-                    setupPrecipitationChart(weatherData)
-                    recyclerView.visibility = View.GONE
-                    chart.visibility = View.VISIBLE
-                }
-                isWeatherDisplayed = !isWeatherDisplayed
+    private fun fetchRegionSpecificData() {
+        weatherViewModel.viewModelScope.launch {
+            // 地域別のデータを取得
+            val regionSpecificData = weatherViewModel.fetchWeatherDataWeekly(selectedAreaCode) ?: return@launch
+
+            // 取得したデータがnullでない場合は、RecyclerView にデータをセットして表示する
+            regionSpecificData.let { data ->
+                val adapter = WeeklyWeatherAdapter(data)
+                recyclerView.layoutManager = LinearLayoutManager(this@WeeklyWeatherActivity)
+                recyclerView.adapter = adapter
+                recyclerView.visibility = View.VISIBLE
+                chart.visibility = View.GONE
+
+                // グラフのセットアップ
+                setupPrecipitationChart(data)
+
+                // ボタンのセットアップ
+                setupLists(data)
             }
         }
-        return isWeatherDisplayed
+    }
+
+    private fun setupLists(weatherData: List<WeatherData>?) {
+        val uniqueAreaNames = weatherData?.map { it.areaName }?.distinct() ?: return
+
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("地域を選択してください")
+
+        val areaNamesArray = uniqueAreaNames.toTypedArray()
+        builder.setItems(areaNamesArray) { _, which ->
+            val selectedAreaName = areaNamesArray[which]
+            weatherViewModel.viewModelScope.launch {
+                fetchDataAndGenerateText(selectedAreaName, weatherData)
+            }
+        }
+
+        val dialog = builder.create()
+        dialog.show()
+    }
+
+
+    private fun fetchDataAndGenerateText(areaName: String, weatherData: List<WeatherData>?) {
+        val areaWeatherData = weatherData?.filter { it.areaName == areaName }
+
+        if (areaWeatherData!!.isNotEmpty()) {
+            setupPrecipitationChart(areaWeatherData)
+            recyclerView.adapter = WeeklyWeatherAdapter(areaWeatherData)
+            recyclerView.visibility = View.VISIBLE
+            chart.visibility = View.GONE
+        } else {
+            recyclerView.visibility = View.GONE
+            chart.visibility = View.VISIBLE
+        }
     }
 
     override fun onDestroy() {
@@ -106,51 +155,51 @@ class WeeklyWeatherActivity : AppCompatActivity() {
         mainViewModel.generatedText.removeObserver(generatedTextObserver)
     }
 
-    private fun setupPrecipitationChart(weatherData: List<WeatherData>) {
-        val weatherToPrecipitation = weatherData.map { it.precipitation }
-//        val precipitationData = PrecipitationProbabilityUtil.getWeeklyPrecipitationProbability(jmaData).second
-
+    private fun setupPrecipitationChart(weatherData: List<WeatherData>?) {
         val entries = mutableListOf<Entry>()
-        val dates = mutableListOf<String>() // グラフ上に表示する日付のリスト
+        val dates = mutableListOf<String>()
 
-        for ((index, value) in weatherToPrecipitation.withIndex()) {
-            // エントリには日付 (index) と降水確率 (value) を設定します
-            entries.add(Entry(index.toFloat(), value))
-            // エントリに対応する日付をリストに追加
-            weatherData.forEach { weather ->
-                val formattedDate = getFormattedDate(weather)
-                dates.add(formattedDate)
-            }
-
+        // 降水確率と日付を取得してエントリと日付リストに追加
+        weatherData?.forEachIndexed { index, data ->
+            entries.add(Entry(index.toFloat(), data.precipitation))
+            // 日付をMM/DD形式にフォーマットして追加
+            val formattedDate = formatDateString(data.date)
+            dates.add(formattedDate)
         }
 
         val dataSet = LineDataSet(entries, "降水確率")
-        dataSet.axisDependency = YAxis.AxisDependency.LEFT // 縦軸を左側に設定
-        dataSet.color = Color.BLUE // ラインの色を設定
-        dataSet.setCircleColor(Color.BLUE) // ポイントの色を設定
+        dataSet.axisDependency = YAxis.AxisDependency.LEFT
+        dataSet.color = Color.BLUE
+        dataSet.setCircleColor(Color.BLUE)
 
         val lineDataSets = ArrayList<ILineDataSet>()
         lineDataSets.add(dataSet)
 
         val lineData = LineData(lineDataSets)
 
-        // X軸を設定
         val xAxis = chart.xAxis
         xAxis.position = XAxis.XAxisPosition.BOTTOM
         xAxis.setDrawGridLines(false)
         xAxis.setDrawAxisLine(true)
         xAxis.setDrawLabels(true)
 
-        // Y軸を設定
-        val yAxisLeft = chart.axisLeft
-        yAxisLeft.axisMinimum = 0f // Y軸の最小値を0に設定
-        yAxisLeft.axisMaximum = 100f // Y軸の最大値を100に設定
-
-        xAxis.valueFormatter = object : IndexAxisValueFormatter() {
+        // X軸の値フォーマットを設定
+        xAxis.valueFormatter = object : ValueFormatter() {
             override fun getFormattedValue(value: Float): String {
-                return dates.toString()
+                // インデックスが日付リストの範囲内にある場合、その日付を返す
+                val index = value.toInt()
+                val datesList = dates.distinct()
+                return if (index in datesList.indices) {
+                    datesList[index]
+                } else {
+                    ""
+                }
             }
         }
+
+        val yAxisLeft = chart.axisLeft
+        yAxisLeft.axisMinimum = 0f
+        yAxisLeft.axisMaximum = 100f
 
         chart.data = lineData
 
@@ -160,28 +209,19 @@ class WeeklyWeatherActivity : AppCompatActivity() {
         chart.invalidate()
     }
 
-    private fun getFormattedDate(weatherData: WeatherData): String {
-        try {
-            val thirdArray = weatherData.date
-            val stringBuilder = StringBuilder()
-
-            // thirdArrayのサイズが4以上の場合、一週間分の日付を取得する
-            if (thirdArray.length >= 4) {
-                for (i in thirdArray.indices) {
-                    val dateArray = thirdArray[i]
-                    stringBuilder.append(dateArray)
-                    stringBuilder.append(", ")
-                }
-            }
-
-            // 最後のカンマとスペースを削除して返す
-            if (stringBuilder.isNotEmpty()) {
-                return stringBuilder.substring(0, stringBuilder.length - 2)
-            }
-        } catch (e: JSONException) {
-            e.printStackTrace()
+    // 日付をMM/DD形式にフォーマットする関数
+    private fun formatDateString(date: String): String {
+        // 正規表現を使用して年、月、日を抽出する
+        val regex = Regex("""(\d+)年(\d+)月(\d+)日.*""")
+        val matchResult = regex.find(date)
+        // マッチした場合は年、月、日を取得してフォーマットする
+        return if (matchResult != null && matchResult.groupValues.size >= 4) {
+            val month = matchResult.groupValues[2].toInt()
+            val day = matchResult.groupValues[3].toInt()
+            String.format("%2d/%2d", month, day)
+        } else {
+            // マッチしない場合は空文字列を返すか、エラー処理を行う
+            ""
         }
-        // データがない場合やエラーが発生した場合は空文字列を返す
-        return ""
     }
 }
