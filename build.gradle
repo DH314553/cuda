@@ -5,3 +5,29 @@ plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.9.0' apply false
     id 'com.google.devtools.ksp' version '1.8.10-1.0.9' apply false
 }
+
+
+// CUDA カーネルをコンパイルして共有ライブラリを作成するタスクを定義
+tasks.register('compileCudaKernel', Exec) {
+    def cudaOptions = ['-arch=sm_50']
+    // cudaOptionsリストをコマンドラインに展開
+    commandLine "${System.env.CUDA_PATH}/bin/nvcc" *cudaOptions '-o' 'libcuda_ridge_detection.so', 'cuda_ridge_detection.cu'
+}
+
+// Gradle ライブラリを作成するタスクを定義
+tasks.register('createCudaLibrary', Jar) {
+    dependsOn 'compileCudaKernel'
+    from 'libcuda_ridge_detection.so'
+    // その他のファイルやライブラリを追加する場合は、ここに追加します
+}
+
+// Jarファイルを生成するタスクを追加
+tasks.register('createJar', Jar) {
+    dependsOn 'createCudaLibrary'
+    from tasks.createCudaLibrary.outputs.files
+    archiveFileName = 'my-library.jar' // Jarファイル名を指定します
+    destinationDirectory = file('build/libs') // Jarファイルを保存するディレクトリを指定します
+}
+
+// デフォルトのタスクとして createJar タスクを設定
+defaultTasks 'createJar'

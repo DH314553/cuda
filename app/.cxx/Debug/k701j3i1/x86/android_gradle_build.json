@@ -1,0 +1,28 @@
+{
+  "buildFiles": [
+    "/home/daisaku/StudioProjects/cuda/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/home/daisaku/Android/Sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/daisaku/StudioProjects/cuda/app/.cxx/Debug/k701j3i1/x86",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/home/daisaku/Android/Sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/daisaku/StudioProjects/cuda/app/.cxx/Debug/k701j3i1/x86",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {},
+  "toolchains": {
+    "toolchain": {
+      "cCompilerExecutable": "/home/daisaku/Android/Sdk/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/bin/clang.lld",
+      "cppCompilerExecutable": "/home/daisaku/Android/Sdk/ndk/25.1.8937393/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++.lld"
+    }
+  },
+  "cFileExtensions": [],
+  "cppFileExtensions": []
+}
