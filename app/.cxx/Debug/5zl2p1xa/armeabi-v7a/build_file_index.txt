@@ -1,0 +1,1 @@
+/home/daisaku/StudioProjects/cuda/app/src/main/cpp/CMakeLists.txt

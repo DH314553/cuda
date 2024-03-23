@@ -19,6 +19,7 @@ import com.daisaku31469.cuda.viewmodel.ViewModelFactory
 import com.daisaku31469.cuda.viewmodel.WeatherViewModel
 import kotlinx.coroutines.launch
 import org.json.JSONArray
+import java.util.Calendar
 
 data class WeatherData(
     val date: String,
@@ -87,7 +88,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var mainViewModel: MainViewModel
     private lateinit var showWeatherButton: Button
     private lateinit var showDateTimeButton: Button
-    private lateinit var weatherResultTextView: TextView
+    private lateinit var weatherResultTextView: ListView
     private lateinit var showListViewButton: Button
     private lateinit var showWeeklyWeatherButton: Button
     private lateinit var jmaWeatherData: JSONArray
@@ -142,8 +143,13 @@ class MainActivity : AppCompatActivity() {
         val selectedFormattedWeatherDataObserver = Observer<String> { _ ->
             mainViewModel.viewModelScope.launch {
                 jmaWeatherData = mainViewModel.getJmaData(selectedAreaCode)!!
-                val selectedFormattedWeatherData = mainViewModel.generateResultText(jmaWeatherData).first.toString()
-                weatherResultTextView.text = selectedFormattedWeatherData
+                val selectedFormattedWeatherData = mainViewModel.generateResultText(jmaWeatherData).first
+                val adapter = ArrayAdapter(
+                    this@MainActivity,
+                    android.R.layout.simple_list_item_1,
+                    selectedFormattedWeatherData
+                )
+                weatherResultTextView.adapter = adapter
             }
         }
         mainViewModel.generatedText.observe(this, selectedFormattedWeatherDataObserver)
@@ -151,20 +157,34 @@ class MainActivity : AppCompatActivity() {
         // setupUI()メソッド内のshowWeatherButtonのクリックリスナーを修正
         showWeatherButton.setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && selectedAreaCode != "") {
-                // 天気データを取得するメソッドを呼び出す
-                mainViewModel.fetchWeatherDataToday(selectedAreaCode)
+                mainViewModel.viewModelScope.launch {
+                    try {
+                        // 天気データを取得するメソッドを呼び出す
+                        val weatherData = mainViewModel.fetchWeatherDataToday(selectedAreaCode)
 
-                mainViewModel.weatherData.observe(this) { weatherData ->
-                    weatherData?.let {
                         // 天気データがnullでない場合の処理
-                        // ここにUIを更新するコードを記述します
-                        val formattedWeatherData = mainViewModel.fetchWeatherDataToday(selectedAreaCode)
-                        weatherResultTextView.text = formattedWeatherData.toString()
+                        weatherData.let { weatherList ->
+                            val adapter = ArrayAdapter(
+                                this@MainActivity,
+                                android.R.layout.simple_list_item_1,
+                                weatherList.map {
+                                    "日付: ${it.date}\n" +
+                                            "地域名: ${it.areaName}\n" +
+                                            "降水確率: ${it.precipitation}%\n" +
+                                            "天気予測: ${it.predictedWeather}\n"
+                                } // 天気データをそのまま渡す
+                            )
+                            weatherResultTextView.adapter = adapter
+                            showWeeklyWeatherButton.visibility = View.VISIBLE
+                        }
+                    } catch (e: Exception) {
+                        // エラーが発生した場合の処理
+                        Toast.makeText(this@MainActivity, "データが取得できませんでした", Toast.LENGTH_SHORT).show()
+                    } finally {
+                        // 一週間の天気のボタンを有効にする
                         showWeeklyWeatherButton.visibility = View.VISIBLE
-                    } ?: Toast.makeText(this@MainActivity, "データが取得できませんでした", Toast.LENGTH_SHORT).show()
+                    }
                 }
-                // 一週間の天気のボタンを有効にする
-                showWeeklyWeatherButton.visibility = View.VISIBLE
             } else {
                 Toast.makeText(this@MainActivity, "エリアが選択されていません", Toast.LENGTH_SHORT).show()
             }
@@ -177,20 +197,21 @@ class MainActivity : AppCompatActivity() {
         }
 
 // formattedWeatherDataObserverを追加
-        val formattedWeatherDataObserver = Observer<List<WeatherData>> { weatherDataList ->
-            // 天気情報データが更新されたときの処理を記述
-            // たとえば、天気情報を表示するTextViewにデータを設定する
-            val stringBuilder = StringBuilder()
-            for (weatherData in weatherDataList) {
-                stringBuilder.append("日付: ${weatherData.date}\n")
-                stringBuilder.append("地域名: ${weatherData.areaName}\n")
-                stringBuilder.append("降水確率: ${weatherData.precipitation}%\n")
-                stringBuilder.append("天気予測: ${weatherData.predictedWeather}\n\n")
-            }
-            weatherResultTextView.text = stringBuilder.toString()
-        }
 
-// formattedWeatherDataObserverをObserverとして設定
+        val formattedWeatherDataObserver = Observer<List<WeatherData>> { weatherDataList ->
+            // ArrayAdapter を使用して ListView に天気情報を表示する
+            val adapter = ArrayAdapter(
+                this,
+                android.R.layout.simple_list_item_1,
+                weatherDataList.map { weatherData ->
+                    "日付: ${weatherData.date}\n" +
+                            "地域名: ${weatherData.areaName}\n" +
+                            "降水確率: ${weatherData.precipitation}%\n" +
+                            "天気予測: ${weatherData.predictedWeather}\n"
+                }
+            )
+            weatherResultTextView.adapter = adapter
+        }
         mainViewModel.formattedWeatherData.observe(this, formattedWeatherDataObserver)
 
         // 地域リストを表示するボタンにリスナーを設定
@@ -232,10 +253,8 @@ class MainActivity : AppCompatActivity() {
                 val year = datePicker.year
                 val month = datePicker.month
                 val dayOfMonth = datePicker.dayOfMonth
-                val hourOfDay =
-                    timePicker.hour
-                val minute =
-                    timePicker.minute
+                val hourOfDay = timePicker.hour
+                val minute = timePicker.minute
                 val selectedDateTime = "${year}年${month + 1}月${dayOfMonth}日 ${hourOfDay}時${minute}分"
                 selectedDateTimeTextView.text = selectedDateTime
                 dialog.dismiss()
@@ -245,11 +264,31 @@ class MainActivity : AppCompatActivity() {
             }
             .create()
 
+        // 現在の日時を取得
+        val currentCalendar = Calendar.getInstance()
+
+        // 明日の日時を計算
+        val tomorrowCalendar = Calendar.getInstance()
+        tomorrowCalendar.add(Calendar.DAY_OF_MONTH, 1)
+
+        // 明日の日時以降の日付を設定
+        datePicker.minDate = currentCalendar.timeInMillis
+        datePicker.maxDate = tomorrowCalendar.timeInMillis
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            datePicker.setOnDateChangedListener { _, _, _, _ ->
-                // 日付が選択されたらTimePickerを表示
-                timePicker.visibility = View.VISIBLE
-                datePicker.visibility = View.GONE
+            datePicker.setOnDateChangedListener { _, year, monthOfYear, dayOfMonth ->
+                // 選択された日時が明日以降の場合はTimePickerを表示
+                val selectedDate = Calendar.getInstance()
+                selectedDate.set(year, monthOfYear, dayOfMonth)
+
+                if (selectedDate.after(currentCalendar)) {
+                    // 日付が選択されたらTimePickerを表示
+                    timePicker.visibility = View.VISIBLE
+                    datePicker.visibility = View.GONE
+                } else {
+                    timePicker.visibility = View.GONE
+                    datePicker.visibility = View.VISIBLE
+                }
             }
         }
         dialog.show()
